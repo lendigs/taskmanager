@@ -1,0 +1,6 @@
+{
+  "mode": "debug",
+  "lifetime": true,
+  "werror": false,
+  "lld": false
+}

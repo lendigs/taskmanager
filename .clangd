@@ -1,0 +1,10 @@
+# xmake owns language, include paths, defines and warnings.
+CompileFlags:
+  CompilationDatabase: .
+Diagnostics:
+  UnusedIncludes: Strict
+  MissingIncludes: None
+  ClangTidy:
+    FastCheckFilter: Strict
+    # Full path-sensitive analysis belongs in the batch clang-tidy run.
+    Remove: [clang-analyzer-*]
