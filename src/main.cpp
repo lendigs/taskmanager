@@ -106,7 +106,6 @@ public:
 
 int main() {
     std::print("\033[H\033[2J");
-    std::println("[DEBUG] Current Working Directory: {}",std::filesystem::current_path().string());
     TaskManager tm;
     tm.load();
     std::println("{}Welcome to small task manager!{}", color::green, color::reset);
@@ -154,7 +153,7 @@ int main() {
                     std::println("{}Task with this id not found.{}", color::yellow, color::reset);
                     break;
                 case RemoveResult::SaveFailed:
-                    std::println("{}Removed from memory, but failed to save to disk!{}",
+                    std::println("{}Failed to save changes, nothing was removed.{}",
                                  color::red, color::reset);
                     break;
             }
