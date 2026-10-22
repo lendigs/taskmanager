@@ -20,13 +20,15 @@ struct Task {
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Task, id, title, status);
 
+enum class RemoveResult { Ok, NotFound, SaveFailed };
+
 class TaskManager {
 private:
     std::vector<Task> tasks;
     u32 next_id = 1;
 
 public:
-    bool save() {
+    bool save() const {
         json j;
         j["next_id"] = next_id;
         j["tasks"] = tasks;
@@ -56,7 +58,7 @@ public:
         try {
             json j = json::parse(file);
             if (j.contains("next_id")) {
-                next_id = j["next_id"].get<u32>();
+                next_id = j["next_id"].get<decltype(next_id)>();
             }
             if (j.contains("tasks") && j["tasks"].is_array()) {
                 tasks = j["tasks"].get<std::vector<Task>>();
@@ -67,19 +69,19 @@ public:
         }
     }
 
-    void new_task(std::string title_) {
+    bool new_task(std::string title_) {
         if (tasks.empty()) {
-            next_id = 1;
+            next_id = 1; // if task list is empty -> reset id
         }
         tasks.emplace_back(
             Task{.title = std::move(title_), .id = next_id, .status = TaskStatus::Pending});
         next_id += 1;
-        save();
+        return save();
     }
 
     void list() const {
         if (tasks.empty()) {
-            std::println("{}There are no avaliable tasks!{}", color::yellow, color::reset);
+            std::println("{}There are no available tasks!{}", color::yellow, color::reset);
         }
         for (const auto& x : tasks) {
             auto [status_str, status_color] = x.status == TaskStatus::Done
@@ -90,14 +92,15 @@ public:
         }
     }
 
-    bool remove(u32 id_) {
-        if (std::erase_if(tasks, [&](const Task& t) { return t.id == id_; })) {
-            save();
-            return true;
-        } else {
-            std::println("Task with this id not found.");
-            return false;
+    RemoveResult remove(u32 id_) {
+        if (std::erase_if(tasks, [&](const Task& t) { return t.id == id_; }) == 0) {
+            return RemoveResult::NotFound;
         }
+        if (save()) {
+            return RemoveResult::Ok;
+        }
+        load();
+        return RemoveResult::SaveFailed;
     }
 };
 
@@ -115,7 +118,7 @@ int main() {
         auto result_ = prompt<u16>("Your choice: ", "{}");
         if (!result_) {
             std::println("Error while reading line, Error: {}", result_.error().msg());
-            break;
+            continue;
         }
 
         u16 choice_ = result_->value();
@@ -124,28 +127,42 @@ int main() {
             auto result = prompt<std::string>("Enter title: ", " {:[^\n]}");
             if (!result) {
                 std::println("Error while reading line: {}", result.error().msg());
-                break;
+                continue;
             }
 
             std::string title = result->value();
-            tm.new_task(title);
-            std::println("{}Succesfully added task!{}", color::green, color::reset);
+            if (tm.new_task(title)) {
+                std::println("{}Successfully added task!{}", color::green, color::reset);
+            } else {
+                std::println("{}Error while adding task!{}", color::red, color::reset);
+            }
         } else if (choice_ == 2) {
             tm.list();
         } else if (choice_ == 3) {
             auto result = prompt<u32>("Enter id of a task to remove: ", "{}");
             if (!result) {
                 std::println("Invalid task format! [Error:{}]", result.error().msg());
-                break;
+                continue;
             }
 
             u32 id = result->value();
-            tm.remove(id);
+            switch (tm.remove(id)) {
+                case RemoveResult::Ok:
+                    std::println("{}Successfully removed task!{}", color::green, color::reset);
+                    break;
+                case RemoveResult::NotFound:
+                    std::println("{}Task with this id not found.{}", color::yellow, color::reset);
+                    break;
+                case RemoveResult::SaveFailed:
+                    std::println("{}Removed from memory, but failed to save to disk!{}",
+                                 color::red, color::reset);
+                    break;
+            }
         } else if (choice_ == 0) {
             std::print("{}Bye!{}", color::red, color::reset);
             break;
         } else {
-            std::print("Unknown command!");
+            std::print("Unknown command!\n");
         }
     }
 

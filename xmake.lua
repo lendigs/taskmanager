@@ -99,7 +99,5 @@ target("main")
     add_packages("scnlib")
     add_packages("nlohmann_json");
 
-    set_rundir("$(projectdir)")
-
     project_settings()
 target_end()
