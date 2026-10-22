@@ -94,7 +94,12 @@ end
 target("main")
     set_kind("binary")
     add_files("src/**.cpp")
+
+    -- PACKAGES
     add_packages("scnlib")
     add_packages("nlohmann_json");
+
+    set_rundir("$(projectdir)")
+
     project_settings()
 target_end()

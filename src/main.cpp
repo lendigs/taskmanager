@@ -5,6 +5,7 @@
 #include <print>
 #include <scn/scan.h>
 #include <vector>
+#include <filesystem>
 
 using nlohmann::json;
 using scn::prompt;
@@ -55,7 +56,7 @@ public:
         try {
             json j = json::parse(file);
             if (j.contains("next_id")) {
-                next_id = j["next_id"].get<decltype(next_id)>();
+                next_id = j["next_id"].get<u32>();
             }
             if (j.contains("tasks") && j["tasks"].is_array()) {
                 tasks = j["tasks"].get<std::vector<Task>>();
@@ -102,6 +103,7 @@ public:
 
 int main() {
     std::print("\033[H\033[2J");
+    std::println("[DEBUG] Current Working Directory: {}",std::filesystem::current_path().string());
     TaskManager tm;
     tm.load();
     std::println("{}Welcome to small task manager!{}", color::green, color::reset);
