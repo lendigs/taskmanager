@@ -10,8 +10,8 @@ set_policy("check.auto_ignore_flags", false)
 add_rules("plugin.compile_commands.autoupdate", {outputdir = "."})
 
 -- REQUIRES
-add_requires("scnlib");
-add_requires("nlohmann_json");
+add_requires("scnlib")
+add_requires("nlohmann_json")
 -- REQUIRES
 
 
@@ -97,7 +97,7 @@ target("main")
 
     -- PACKAGES
     add_packages("scnlib")
-    add_packages("nlohmann_json");
+    add_packages("nlohmann_json")
 
     project_settings()
 target_end()

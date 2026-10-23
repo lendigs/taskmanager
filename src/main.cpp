@@ -5,7 +5,6 @@
 #include <print>
 #include <scn/scan.h>
 #include <vector>
-#include <filesystem>
 
 using nlohmann::json;
 using scn::prompt;
