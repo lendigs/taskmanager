@@ -1,5 +1,5 @@
 {
-  "mode": "debug",
+  "mode": "analyze",
   "lifetime": true,
   "werror": false,
   "lld": false

@@ -5,6 +5,7 @@
 #include <print>
 #include <scn/scan.h>
 #include <vector>
+#include <expected>
 
 using nlohmann::json;
 using scn::prompt;
@@ -21,7 +22,9 @@ struct Task {
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Task, id, title, status);
 
-enum class RemoveResult { Ok, NotFound, SaveFailed };
+enum class TaskError {NotFound, SaveFailed };
+
+
 
 class TaskManager {
 private:
@@ -64,20 +67,21 @@ public:
             if (j.contains("tasks") && j["tasks"].is_array()) {
                 tasks = j["tasks"].get<std::vector<Task>>();
             }
-            std::println("[DEBUG] Loaded data from tasks.json!");
         } catch (const json::exception& e) {
             std::println("Error while parsing data from file: {}", e.what());
         }
     }
 
-    bool new_task(std::string title_) {
-        if (tasks.empty()) {
-            next_id = 1; // if task list is empty -> reset id
+    bool new_task(std::string title) {
+        tasks.push_back(
+            Task{.title = std::move(title), .id = next_id, .status = TaskStatus::Pending});
+        ++next_id;
+        if (!save()) {
+            tasks.pop_back();
+            --next_id;
+            return false;
         }
-        tasks.emplace_back(
-            Task{.title = std::move(title_), .id = next_id, .status = TaskStatus::Pending});
-        next_id += 1;
-        return save();
+        return true;
     }
 
     void list() const {
@@ -93,24 +97,24 @@ public:
         }
     }
 
-    RemoveResult remove(u32 id_) {
+    std::expected<void, TaskError> remove(u32 &id_) {
         auto backup = tasks;
         if (std::erase_if(tasks, [&](const Task& t) { return t.id == id_; }) == 0) {
-            return RemoveResult::NotFound;
+            return std::unexpected(TaskError::NotFound);
         }
 
         if (!save()) {
             tasks = std::move(backup);
-            return RemoveResult::SaveFailed;
+            return std::unexpected(TaskError::SaveFailed);
         }
 
-        return RemoveResult::Ok;
+        return {};
     }
 
-    bool mark_as_done(u32 id_) {
+    std::expected<void, TaskError> mark_as_done(u32 &id_) {
         auto it = std::ranges::find(tasks, id_, &Task::id);
         if (it == tasks.end()) {
-            return false;
+            return std::unexpected(TaskError::NotFound);
         }
 
         auto prev_status = it->status;
@@ -118,9 +122,9 @@ public:
 
         if (!save()) {
             it->status = prev_status;
-            return false;
+            return std::unexpected(TaskError::SaveFailed);
         }
-        return true;
+        return {};
     }
 };
 
@@ -150,10 +154,11 @@ int main() {
             }
 
             std::string title = result->value();
-            if (tm.new_task(title)) {
-                std::println("{}Successfully added task!{}", color::green, color::reset);
+            auto result_new_task = tm.new_task(title);
+            if (result_new_task) {
+                std::println("{}Succesfully saved task!{}", color::green, color::reset);
             } else {
-                std::println("{}Error while adding task!{}", color::red, color::reset);
+                std::println("{}Failed to save task!{}", color::red, color::reset);
             }
         } else if (choice_ == 2) {
             tm.list();
@@ -164,10 +169,17 @@ int main() {
                 continue;
             }
             auto id_ = result->value();
-            if (tm.mark_as_done(id_)) {
-                std::println("{}Successfully changed task status! {}", color::green, color::reset);
-            } else {
-                std::println("{}Task with this id not found!{}", color::red, color::reset);
+            auto result_done = tm.mark_as_done(id_);
+            if (!result_done) {
+                switch(result_done.error()) {
+                    case TaskError::NotFound:
+                        std::println("{}Error: Task with this id not found!{}", color::red, color::reset);
+                        break;
+                    case TaskError::SaveFailed:
+                        std::println("{}Error: Failed to save data!{}", color::red, color::reset);
+                }
+            } else{
+                std::println("{}Succesfully marked task as done!{}", color::green, color::reset);
             }
         }
 
@@ -179,17 +191,18 @@ int main() {
             }
 
             u32 id = result->value();
-            switch (tm.remove(id)) {
-            case RemoveResult::Ok:
-                std::println("{}Successfully removed task!{}", color::green, color::reset);
-                break;
-            case RemoveResult::NotFound:
-                std::println("{}Task with this id not found.{}", color::yellow, color::reset);
-                break;
-            case RemoveResult::SaveFailed:
-                std::println("{}Failed to save changes, nothing removed{}", color::red,
-                             color::reset);
-                break;
+            auto result_remove = tm.remove(id);
+            if (!result_remove) {
+                switch(result_remove.error()) {
+                    case TaskError::NotFound:
+                        std::println("{}Error: Task with this id not found!{}", color::red, color::reset);
+                        break;
+                    case TaskError::SaveFailed:
+                        std::println("{}Error: Failed to save data!{}", color::red, color::reset);
+                        break;
+                }
+            } else {
+                std::println("{}Task removed successfully!{}", color::green, color::reset);
             }
         } else if (choice_ == 0) {
             std::print("{}Bye!{}", color::red, color::reset);
