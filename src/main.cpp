@@ -9,6 +9,8 @@
 using nlohmann::json;
 using scn::prompt;
 
+const std::string file_path = "tasks.json";
+
 enum class TaskStatus { Done, Pending };
 
 struct Task {
@@ -33,7 +35,7 @@ public:
         j["tasks"] = tasks;
 
         try {
-            std::ofstream file("tasks.json");
+            std::ofstream file(file_path);
             if (!file) {
                 return false;
             }
@@ -50,7 +52,7 @@ public:
     }
 
     void load() {
-        std::ifstream file("tasks.json");
+        std::ifstream file(file_path);
         if (!file) {
             return;
         }
@@ -92,14 +94,33 @@ public:
     }
 
     RemoveResult remove(u32 id_) {
+        auto backup = tasks;
         if (std::erase_if(tasks, [&](const Task& t) { return t.id == id_; }) == 0) {
             return RemoveResult::NotFound;
         }
-        if (save()) {
-            return RemoveResult::Ok;
+
+        if (!save()) {
+            tasks = std::move(backup);
+            return RemoveResult::SaveFailed;
         }
-        load();
-        return RemoveResult::SaveFailed;
+
+        return RemoveResult::Ok;
+    }
+
+    bool mark_as_done(u32 id_) {
+        auto it = std::ranges::find(tasks, id_, &Task::id);
+        if (it == tasks.end()) {
+            return false;
+        }
+
+        auto prev_status = it->status;
+        it->status = TaskStatus::Done;
+
+        if (!save()) {
+            it->status = prev_status;
+            return false;
+        }
+        return true;
     }
 };
 
@@ -111,7 +132,7 @@ int main() {
 
     while (true) {
         std::println("====================================");
-        std::println("1. Add task\n2. Task list\n3. Remove task\n0. Exit");
+        std::println("1. Add task\n2. Task list\n3. Mark task as done\n4. Remove task\n0. Exit");
 
         auto result_ = prompt<u16>("Your choice: ", "{}");
         if (!result_) {
@@ -137,6 +158,20 @@ int main() {
         } else if (choice_ == 2) {
             tm.list();
         } else if (choice_ == 3) {
+            auto result = prompt<u32>("Enter id of a task you want to mark as done: ", "{}");
+            if (!result) {
+                std::println("Error while reading line: {}", result.error().msg());
+                continue;
+            }
+            auto id_ = result->value();
+            if (tm.mark_as_done(id_)) {
+                std::println("{}Successfully changed task status! {}", color::green, color::reset);
+            } else {
+                std::println("{}Task with this id not found!{}", color::red, color::reset);
+            }
+        }
+
+        else if (choice_ == 4) {
             auto result = prompt<u32>("Enter id of a task to remove: ", "{}");
             if (!result) {
                 std::println("Invalid task format! [Error:{}]", result.error().msg());
@@ -145,16 +180,16 @@ int main() {
 
             u32 id = result->value();
             switch (tm.remove(id)) {
-                case RemoveResult::Ok:
-                    std::println("{}Successfully removed task!{}", color::green, color::reset);
-                    break;
-                case RemoveResult::NotFound:
-                    std::println("{}Task with this id not found.{}", color::yellow, color::reset);
-                    break;
-                case RemoveResult::SaveFailed:
-                    std::println("{}Failed to save changes, nothing was removed.{}",
-                                 color::red, color::reset);
-                    break;
+            case RemoveResult::Ok:
+                std::println("{}Successfully removed task!{}", color::green, color::reset);
+                break;
+            case RemoveResult::NotFound:
+                std::println("{}Task with this id not found.{}", color::yellow, color::reset);
+                break;
+            case RemoveResult::SaveFailed:
+                std::println("{}Failed to save changes, nothing removed{}", color::red,
+                             color::reset);
+                break;
             }
         } else if (choice_ == 0) {
             std::print("{}Bye!{}", color::red, color::reset);
