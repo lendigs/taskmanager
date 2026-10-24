@@ -1,11 +1,11 @@
 #include "colors.hpp"
 #include "type_aliases.hpp"
+#include <expected>
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <print>
 #include <scn/scan.h>
 #include <vector>
-#include <expected>
 
 using nlohmann::json;
 using scn::prompt;
@@ -22,9 +22,7 @@ struct Task {
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Task, id, title, status);
 
-enum class TaskError {NotFound, SaveFailed };
-
-
+enum class TaskError { NotFound, SaveFailed };
 
 class TaskManager {
 private:
@@ -97,7 +95,7 @@ public:
         }
     }
 
-    std::expected<void, TaskError> remove(u32 &id_) {
+    std::expected<void, TaskError> remove(u32& id_) {
         auto backup = tasks;
         if (std::erase_if(tasks, [&](const Task& t) { return t.id == id_; }) == 0) {
             return std::unexpected(TaskError::NotFound);
@@ -110,8 +108,17 @@ public:
 
         return {};
     }
+    std::optional<bool >remove_all() {
+        auto backup = tasks;
+        tasks.erase(tasks.begin(), tasks.end());
 
-    std::expected<void, TaskError> mark_as_done(u32 &id_) {
+        if (!save()) {
+            tasks = std::move(backup);
+            return std::nullopt;
+        }
+        return true;
+    }
+    std::expected<void, TaskError> mark_as_done(u32& id_) {
         auto it = std::ranges::find(tasks, id_, &Task::id);
         if (it == tasks.end()) {
             return std::unexpected(TaskError::NotFound);
@@ -136,12 +143,12 @@ int main() {
 
     while (true) {
         std::println("====================================");
-        std::println("1. Add task\n2. Task list\n3. Mark task as done\n4. Remove task\n0. Exit");
+        std::println("1. Add task\n2. Task list\n3. Mark task as done\n4. Remove task\n5. Remove all tasks\n0. Exit");
 
         auto result_ = prompt<u16>("Your choice: ", "{}");
         if (!result_) {
             std::println("Error while reading line, Error: {}", result_.error().msg());
-            continue;
+            break;
         }
 
         u16 choice_ = result_->value();
@@ -171,14 +178,15 @@ int main() {
             auto id_ = result->value();
             auto result_done = tm.mark_as_done(id_);
             if (!result_done) {
-                switch(result_done.error()) {
-                    case TaskError::NotFound:
-                        std::println("{}Error: Task with this id not found!{}", color::red, color::reset);
-                        break;
-                    case TaskError::SaveFailed:
-                        std::println("{}Error: Failed to save data!{}", color::red, color::reset);
+                switch (result_done.error()) {
+                case TaskError::NotFound:
+                    std::println("{}Error: Task with this id not found!{}", color::red,
+                                 color::reset);
+                    break;
+                case TaskError::SaveFailed:
+                    std::println("{}Error: Failed to save data!{}", color::red, color::reset);
                 }
-            } else{
+            } else {
                 std::println("{}Succesfully marked task as done!{}", color::green, color::reset);
             }
         }
@@ -193,18 +201,27 @@ int main() {
             u32 id = result->value();
             auto result_remove = tm.remove(id);
             if (!result_remove) {
-                switch(result_remove.error()) {
-                    case TaskError::NotFound:
-                        std::println("{}Error: Task with this id not found!{}", color::red, color::reset);
-                        break;
-                    case TaskError::SaveFailed:
-                        std::println("{}Error: Failed to save data!{}", color::red, color::reset);
-                        break;
+                switch (result_remove.error()) {
+                case TaskError::NotFound:
+                    std::println("{}Error: Task with this id not found!{}", color::red,
+                                 color::reset);
+                    break;
+                case TaskError::SaveFailed:
+                    std::println("{}Error: Failed to save data!{}", color::red, color::reset);
+                    break;
                 }
             } else {
                 std::println("{}Task removed successfully!{}", color::green, color::reset);
             }
-        } else if (choice_ == 0) {
+        } else if (choice_ == 5) {
+            auto remove_result = tm.remove_all();
+            if (remove_result == std::nullopt) {
+                std::println("{}Error while saving data!{}", color::red, color::reset);
+            }
+            std::println("{}Successfully removed tasks!{}", color::green, color::reset);
+        }
+    
+        else if (choice_ == 0) {
             std::print("{}Bye!{}", color::red, color::reset);
             break;
         } else {
