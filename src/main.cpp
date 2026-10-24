@@ -108,13 +108,13 @@ public:
 
         return {};
     }
-    std::optional<bool >remove_all() {
+    bool remove_all() {
         auto backup = tasks;
         tasks.erase(tasks.begin(), tasks.end());
 
         if (!save()) {
             tasks = std::move(backup);
-            return std::nullopt;
+            return false;
         }
         return true;
     }
@@ -215,12 +215,12 @@ int main() {
             }
         } else if (choice_ == 5) {
             auto remove_result = tm.remove_all();
-            if (remove_result == std::nullopt) {
+            if(!remove_result) {
                 std::println("{}Error while saving data!{}", color::red, color::reset);
             }
             std::println("{}Successfully removed tasks!{}", color::green, color::reset);
         }
-    
+
         else if (choice_ == 0) {
             std::print("{}Bye!{}", color::red, color::reset);
             break;
