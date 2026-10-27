@@ -13,6 +13,7 @@ using scn::prompt;
 const std::string file_path = "tasks.json";
 
 enum class TaskStatus { Done, Pending };
+enum class RemoveAllStatus {Empty, SaveFailed, Success};
 
 struct Task {
     std::string title;
@@ -108,15 +109,29 @@ public:
 
         return {};
     }
-    bool remove_all() {
-        auto backup = tasks;
-        tasks.erase(tasks.begin(), tasks.end());
+    // bool remove_all() {
+    //     if (tasks.empty()) {
+            
+    //     }
+    //     auto backup = tasks;
+    //     tasks.erase(tasks.begin(), tasks.end());
 
-        if (!save()) {
-            tasks = std::move(backup);
-            return false;
+    //     if (!save()) {
+    //         tasks = std::move(backup);
+    //         return false;
+    //     }
+    //     return true;
+    // }
+    RemoveAllStatus remove_all() {
+        if (tasks.empty()) {
+            return RemoveAllStatus::Empty;
         }
-        return true;
+        auto backup = tasks;
+        tasks.erase(tasks.begin(),tasks.end());
+        if (!save()) {
+            return RemoveAllStatus::SaveFailed;
+        }
+        return RemoveAllStatus::Success;
     }
     std::expected<void, TaskError> mark_as_done(u32& id_) {
         auto it = std::ranges::find(tasks, id_, &Task::id);
@@ -215,12 +230,18 @@ int main() {
             }
         } else if (choice_ == 5) {
             auto remove_result = tm.remove_all();
-            if(!remove_result) {
-                std::println("{}Error while saving data!{}", color::red, color::reset);
+            switch (remove_result) {
+                case RemoveAllStatus::Success:
+                    std::println("{}Successfully removed tasks!{}", color::green, color::reset);
+                    break;
+                case RemoveAllStatus::Empty:
+                    std::println("{}Task list is empty, nothing to remove{}", color::red, color::reset);
+                    break;
+                case RemoveAllStatus::SaveFailed:
+                    std::println("{}Error while saving data!{}", color::red, color::reset);
+                    break;
             }
-            std::println("{}Successfully removed tasks!{}", color::green, color::reset);
         }
-
         else if (choice_ == 0) {
             std::print("{}Bye!{}", color::red, color::reset);
             break;
