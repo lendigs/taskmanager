@@ -1,0 +1,8 @@
+{
+  "mode": "analyze",
+  "lifetime": true,
+  "werror": false,
+  "lld": false,
+  "modules": "none",
+  "std_dir": ""
+}

@@ -7,13 +7,16 @@
 #include <scn/scan.h>
 #include <vector>
 
+
+
 using nlohmann::json;
 using scn::prompt;
 
 const std::string file_path = "tasks.json";
 
 enum class TaskStatus { Done, Pending };
-enum class RemoveAllStatus {Empty, SaveFailed, Success};
+enum class RemoveAllStatus {Empty, SaveFailed};
+enum class TaskError { NotFound, SaveFailed };
 
 struct Task {
     std::string title;
@@ -23,7 +26,6 @@ struct Task {
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Task, id, title, status);
 
-enum class TaskError { NotFound, SaveFailed };
 
 class TaskManager {
 private:
@@ -111,7 +113,7 @@ public:
     }
     // bool remove_all() {
     //     if (tasks.empty()) {
-            
+
     //     }
     //     auto backup = tasks;
     //     tasks.erase(tasks.begin(), tasks.end());
@@ -122,16 +124,17 @@ public:
     //     }
     //     return true;
     // }
-    RemoveAllStatus remove_all() {
+    std::expected<void, RemoveAllStatus> remove_all() {
         if (tasks.empty()) {
-            return RemoveAllStatus::Empty;
+            return std::unexpected(RemoveAllStatus::Empty);
         }
         auto backup = tasks;
-        tasks.erase(tasks.begin(),tasks.end());
+        tasks.clear();
         if (!save()) {
-            return RemoveAllStatus::SaveFailed;
+            tasks = std::move(backup);
+            return std::unexpected(RemoveAllStatus::SaveFailed);
         }
-        return RemoveAllStatus::Success;
+        return {};
     }
     std::expected<void, TaskError> mark_as_done(u32& id_) {
         auto it = std::ranges::find(tasks, id_, &Task::id);
@@ -148,6 +151,21 @@ public:
         }
         return {};
     }
+
+    std::expected<void, TaskError> rename_title(u32 &_id,const  std::string &_title) {
+        auto it = std::ranges::find(tasks, _id, &Task::id);
+        if (it == tasks.end()) {
+            return std::unexpected(TaskError::NotFound);
+        }
+        auto old_title = it->title;
+        it->title = _title;
+        if (!save()) {
+            it->title = std::move(old_title);
+            return std::unexpected(TaskError::SaveFailed);
+        }
+        return {};
+    }
+
 };
 
 int main() {
@@ -158,7 +176,7 @@ int main() {
 
     while (true) {
         std::println("====================================");
-        std::println("1. Add task\n2. Task list\n3. Mark task as done\n4. Remove task\n5. Remove all tasks\n0. Exit");
+        std::println("1. Add task\n2. Task list\n3. Mark task as done\n4. Remove task\n5. Remove all tasks\n6. Change title\n0. Exit");
 
         auto result_ = prompt<u16>("Your choice: ", "{}");
         if (!result_) {
@@ -174,7 +192,6 @@ int main() {
                 std::println("Error while reading line: {}", result.error().msg());
                 continue;
             }
-
             std::string title = result->value();
             auto result_new_task = tm.new_task(title);
             if (result_new_task) {
@@ -212,7 +229,6 @@ int main() {
                 std::println("Invalid task format! [Error:{}]", result.error().msg());
                 continue;
             }
-
             u32 id = result->value();
             auto result_remove = tm.remove(id);
             if (!result_remove) {
@@ -230,16 +246,45 @@ int main() {
             }
         } else if (choice_ == 5) {
             auto remove_result = tm.remove_all();
-            switch (remove_result) {
-                case RemoveAllStatus::Success:
-                    std::println("{}Successfully removed tasks!{}", color::green, color::reset);
-                    break;
-                case RemoveAllStatus::Empty:
-                    std::println("{}Task list is empty, nothing to remove{}", color::red, color::reset);
-                    break;
-                case RemoveAllStatus::SaveFailed:
-                    std::println("{}Error while saving data!{}", color::red, color::reset);
-                    break;
+            if (!remove_result) {
+                switch (remove_result.error()) {
+                    case RemoveAllStatus::Empty:
+                        std::println("{}Error: Task list is empty!{}", color::red, color::reset);
+                        break;
+                    case RemoveAllStatus::SaveFailed:
+                        std::println("{}Error: Failed to save data!{}", color::red, color::reset);
+                        break;
+                }
+            } else {
+                std::println("{}Succesfully cleaned up tasks!{}", color::green, color::reset);
+            }
+        } else if (choice_ == 6) {
+            auto result_id = prompt<u32>("Enter id of a task: ", "{}");
+
+            if (!result_id) {
+                std::println("Error while reading line: {}", result_id.error().msg());
+                continue;
+            }
+
+            auto result_title = prompt<std::string>("Enter new title: ", " {:[^\n]}");
+
+            if (!result_title) {
+                std::println("Error while reading line: {}", result_title.error().msg());
+                continue;
+            }
+
+            auto result = tm.rename_title(result_id->value(), result_title->value());
+            if (!result) {
+                switch (result.error()) {
+                    case TaskError::NotFound:
+                        std::println("{}Error: Task not found!{}", color::red, color::reset);
+                        break;
+                    case TaskError::SaveFailed:
+                        std::println("{}Error: Failed to save data!{}", color::red, color::reset);
+                        break;
+                }
+            } else {
+                std::println("{}Successfully change title!{}", color::green, color::reset);
             }
         }
         else if (choice_ == 0) {
